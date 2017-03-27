@@ -3,6 +3,7 @@
 import collections
 import errno
 import os
+import shutil
 import sys
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -15,8 +16,7 @@ class Page(collections.UserDict):
     def __init__(self,
                  site_root,
                  source,
-                 target,
-                 page_type=None,
+                 target,                 page_type=None,
                  redirects=None):
         self.data = {
             "page_type": page_type,
@@ -59,7 +59,8 @@ class Page(collections.UserDict):
         try:
             with open(self.data['target_path'], "w") as target_file:
                 target_file.write(
-                    html_minify(environment.get_template(self['template']).render(self))
+                    #html_minify(environment.get_template(self['template']).render(self))
+                    environment.get_template(self['template']).render(self)
                 )
         except TemplateNotFound as tnf:
             print(tnf)
@@ -82,16 +83,19 @@ class Resource(collections.UserDict):
                  source,
                  target,
                  resource_type=None):
+
         self.data = {
             "resource_type": resource_type,
             "source": source,
             "source_path": os.path.abspath(os.path.join(site_root, source)),
             "target": target,
             "target_path": os.path.abspath(os.path.join(site_root, target)),
-            "href": target.split('/')[1]
+            "href": target.split('/')[1],
         }
-        with open(self.data["source_path"], "r") as source_file:
-            self.data["content"] = source_file.read()
+
+        if not resource_type == "relocate":
+            with open(self.data["source_path"], "r") as source_file:
+                self.data["content"] = source_file.read()
 
     def __contains__(self, key):
         return str(key) in self.data
@@ -111,17 +115,24 @@ class Resource(collections.UserDict):
     def render(self):
         print("Rendering: %s to %s" % (self.data['source_path'],
                                        self.data['target_path']))
-        try:
-            with open(self.data['target_path'], "w") as target_file:
-                target_file.write(
-                    css_minify(self.data["content"])
-                )
-        except FileNotFoundError as fnf:
-            if fnf.errno == errno.ENOENT:
-                os.makedirs(os.path.split(self.data['target_path'])[0], exist_ok=True)
-                self.render()
-            else:
-                raise
+
+        if not self.get("resource_type") == "relocate":
+            try:
+                with open(self.data['target_path'], "w") as target_file:
+                    target_file.write(
+                        #css_minify(self.data["content"])
+                        self.data["content"]
+                    )
+            except FileNotFoundError as fnf:
+                if fnf.errno == errno.ENOENT:
+                    os.makedirs(os.path.split(self.data['target_path'])[0], exist_ok=True)
+                    self.render()
+                else:
+                    raise
+        else:
+            shutil.rmtree(self.data["target_path"], ignore_errors=True)
+            shutil.copytree(self.data["source_path"], self.data["target_path"])
+
 class Site(object):
     def __init__(self, root, data):
         self.pages = []
