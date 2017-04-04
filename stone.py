@@ -10,7 +10,6 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja2.exceptions import TemplateNotFound
 import json
 import markdown
-from css_html_js_minify import css_minify, html_minify
 
 class Page(collections.UserDict):
     def __init__(self,
@@ -59,7 +58,6 @@ class Page(collections.UserDict):
         try:
             with open(self.data['target_path'], "w") as target_file:
                 target_file.write(
-                    #html_minify(environment.get_template(self['template']).render(self))
                     environment.get_template(self['template']).render(self)
                 )
         except TemplateNotFound as tnf:
@@ -120,7 +118,6 @@ class Resource(collections.UserDict):
             try:
                 with open(self.data['target_path'], "w") as target_file:
                     target_file.write(
-                        #css_minify(self.data["content"])
                         self.data["content"]
                     )
             except FileNotFoundError as fnf:
@@ -130,8 +127,15 @@ class Resource(collections.UserDict):
                 else:
                     raise
         else:
-            shutil.rmtree(self.data["target_path"], ignore_errors=True)
-            shutil.copytree(self.data["source_path"], self.data["target_path"])
+            if os.path.isdir(self.data["source_path"]):
+                shutil.rmtree(self.data["target_path"], ignore_errors=True)
+                shutil.copytree(self.data["source_path"], self.data["target_path"])
+            elif os.path.isfile(self.data["source_path"]):
+                if os.path.exists(self.data["target_path"]):
+                    os.remove(self.data["target_path"])
+                shutil.copy2(self.data["source_path"], self.data["target_path"])
+
+
 
 class Site(object):
     def __init__(self, root, data):
